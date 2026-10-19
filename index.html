@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pixels &amp; Popularity | Video Game Sales Treemap</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script defer src="https://cdn.freecodecamp.org/testable-projects-fcc/v1/bundle.js"></script>
+  <style>
+    :root {
+      --bg: #080f1e;
+      --surface: #111e32;
+      --border: #273b52;
+      --muted: #9eb0c7;
+      --text: #f3f7ff;
+      --accent: #80e3c8;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 46px 22px;
+      background: radial-gradient(ellipse at 85% 0%, #1b3350, transparent 44%), var(--bg);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .page { max-width: 1210px; margin: 0 auto; }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      font-size: clamp(32px, 5vw, 55px);
+      letter-spacing: -.055em;
+      line-height: 1.1;
+      margin: 12px 0;
+    }
+
+    #description {
+      max-width: 780px;
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+      margin: 0 0 25px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 17px;
+    }
+
+    .stat {
+      padding: 18px 21px;
+      border: 1px solid var(--border);
+      border-radius: 15px;
+      background: #101d30;
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 750;
+      letter-spacing: .12em;
+    }
+
+    .stat-number {
+      font-size: 27px;
+      font-weight: 800;
+      margin-top: 7px;
+      letter-spacing: -.045em;
+    }
+
+    .panel {
+      padding: 27px 29px 24px;
+      background: linear-gradient(145deg, #172840, var(--surface));
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.22);
+    }
+
+    .panel-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 19px;
+    }
+
+    .panel-heading strong { font-size: 17px; }
+    .panel-hint { color: var(--muted); font-size: 12px; }
+    .scroll { overflow-x: auto; }
+    .chart-stage { min-width: 760px; position: relative; }
+
+    #treemap {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #0d1a2a;
+      border-radius: 9px;
+    }
+
+    .tile {
+      stroke: #0c1929;
+      stroke-width: 1.7px;
+      cursor: crosshair;
+    }
+
+    .tile:hover, .tile:focus {
+      stroke: #ffffff;
+      stroke-width: 2.5px;
+      filter: brightness(1.12);
+      outline: none;
+    }
+
+    .tile-label {
+      fill: #fff;
+      font-size: 11px;
+      font-weight: 650;
+      pointer-events: none;
+    }
+
+    #tooltip {
+      display: none;
+      position: absolute;
+      z-index: 4;
+      width: max-content;
+      max-width: 255px;
+      padding: 14px 16px;
+      background: #061120;
+      border: 1px solid #5b738c;
+      border-radius: 12px;
+      box-shadow: 0 13px 33px rgba(0, 0, 0, .45);
+      pointer-events: none;
+      line-height: 1.55;
+    }
+
+    .tip-platform {
+      color: var(--accent);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .14em;
+      font-weight: 800;
+    }
+
+    .tip-name { font-size: 15px; font-weight: 760; margin-top: 5px; }
+    .tip-value { font-size: 23px; font-weight: 850; margin-top: 7px; }
+    .tip-unit { font-size: 11px; color: var(--muted); }
+    .legend-heading { margin: 25px 0 8px; font-size: 13px; font-weight: 750; }
+    .legend-caption { color: var(--muted); font-size: 12px; margin: 0 0 9px; }
+
+    #legend {
+      width: 100%;
+      height: auto;
+      display: block;
+      overflow: visible;
+    }
+
+    .legend-label { fill: #dce5f1; font-size: 12px; }
+    .legend-item { stroke: #ffffff22; stroke-width: 1px; }
+
+    .footnote {
+      border-top: 1px solid var(--border);
+      margin-top: 18px;
+      padding-top: 15px;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 9px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .footnote a { color: var(--accent); }
+    .error { color: #ffc1c1; padding: 26px 8px; }
+
+    @media (max-width: 720px) {
+      body { padding: 24px 10px; }
+      .stats { gap: 7px; }
+      .stat { padding: 13px 10px; }
+      .stat-label { font-size: 9px; }
+      .stat-number { font-size: 20px; }
+      .panel { padding: 19px 12px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <div class="eyebrow">Data Atlas / Interactive Series 05</div>
+      <h1 id="title">Pixels &amp; Popularity</h1>
+      <p id="description">
+        A treemap of the 100 best-selling video games in the supplied dataset,
+        grouped by platform. Each rectangle's area represents global sales
+        (millions of copies), and color identifies the console or platform.
+      </p>
+    </header>
+
+    <section class="stats" aria-label="Dataset summary">
+      <div class="stat">
+        <div class="stat-label">Games in dataset</div>
+        <div class="stat-number" id="game-count">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Platforms represented</div>
+        <div class="stat-number" id="platform-count">—</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Highest individual sales</div>
+        <div class="stat-number" id="top-sale">—</div>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Video game sales treemap">
+      <div class="panel-heading">
+        <strong>Best-sellers, by platform</strong>
+        <span class="panel-hint">Hover over a tile to explore a game</span>
+      </div>
+
+      <div class="scroll">
+        <div class="chart-stage">
+          <svg id="treemap" role="img"
+            aria-label="Treemap of the best-selling video games by platform"></svg>
+          <div id="tooltip" data-value="" role="status">
+            <div class="tip-platform" id="tip-platform"></div>
+            <div class="tip-name" id="tip-name"></div>
+            <div class="tip-value" id="tip-value"></div>
+            <div class="tip-unit">Million copies sold worldwide</div>
+          </div>
+        </div>
+      </div>
+
+      <h2 class="legend-heading">Gaming platforms</h2>
+      <p class="legend-caption">Every color represents a different platform.</p>
+      <svg id="legend" role="img" aria-label="Platform color legend"></svg>
+
+      <div class="footnote">
+        <span>Tile area = sales volume. Larger tiles represent more copies sold.</span>
+        <span>Source: <a href="https://cdn.freecodecamp.org/testable-projects-fcc/data/tree_map/video-game-sales-data.json" target="_blank" rel="noopener noreferrer">freeCodeCamp Video Game Sales Data</a></span>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const dataURL =
+      'https://cdn.freecodecamp.org/testable-projects-fcc/data/tree_map/video-game-sales-data.json';
+
+    const WIDTH = 1000;
+    const HEIGHT = 600;
+    const svg = d3.select('#treemap')
+      .attr('viewBox', `0 0 ${WIDTH} ${HEIGHT}`);
+    const tooltip = d3.select('#tooltip');
+
+    const palette = [
+      '#2875bd', '#b95c7b', '#a17f22', '#297a7c', '#704fb5',
+      '#bd673b', '#44895a', '#a94d9c', '#3c86a0', '#8a5eaa',
+      '#c1803d', '#3d987b', '#8364ce', '#b14b63', '#5c81b8',
+      '#99772e', '#4674a7', '#6c9055', '#96619b', '#527d88'
+    ];
+
+    // Break long game titles into short lines inside each rectangle.
+    function labelLines(name, boxWidth, boxHeight) {
+      const maxChars = Math.max(5, Math.floor((boxWidth - 15) / 6.4));
+      const maxLines = Math.min(3, Math.floor((boxHeight - 10) / 14));
+      if (maxLines < 1 || boxWidth < 52) return [];
+
+      const allLines = [];
+      let current = '';
+      for (const word of name.split(/\s+/)) {
+        const next = current ? `${current} ${word}` : word;
+        if (next.length <= maxChars) {
+          current = next;
+        } else {
+          if (current) allLines.push(current);
+          current = word.length > maxChars
+            ? word.slice(0, maxChars - 1) + '…'
+            : word;
+        }
+      }
+      if (current) allLines.push(current);
+
+      const visible = allLines.slice(0, maxLines);
+      if (allLines.length > maxLines && visible.length) {
+        visible[visible.length - 1] =
+          visible[visible.length - 1].slice(0, maxChars - 1) + '…';
+      }
+      return visible;
+    }
+
+    d3.json(dataURL).then(data => {
+      const platforms = data.children.map(d => d.name);
+      const color = d3.scaleOrdinal()
+        .domain(platforms)
+        .range(palette);
+
+      const root = d3.hierarchy(data)
+        .sum(d => Number(d.value) || 0)
+        .sort((a, b) => b.value - a.value);
+
+      // No layout padding or rounding: test #6 checks exact tile areas.
+      d3.treemap()
+        .size([WIDTH, HEIGHT])
+        .paddingInner(0)
+        .round(false)(root);
+
+      const leaves = root.leaves();
+      const topGame = d3.greatest(leaves, d => d.value);
+
+      d3.select('#game-count').text(leaves.length);
+      d3.select('#platform-count').text(platforms.length);
+      d3.select('#top-sale').text(
+        d3.format(',.2f')(topGame.value) + 'M'
+      );
+
+      const tiles = svg.selectAll('g.tile-group')
+        .data(leaves)
+        .enter()
+        .append('g')
+        .attr('class', 'tile-group')
+        .attr('transform', d => `translate(${d.x0},${d.y0})`);
+
+      tiles.append('rect')
+        .attr('class', 'tile')
+        .attr('data-name', d => d.data.name)
+        .attr('data-category', d => d.data.category)
+        .attr('data-value', d => d.data.value)
+        .attr('width', d => d.x1 - d.x0)
+        .attr('height', d => d.y1 - d.y0)
+        .attr('fill', d => color(d.data.category))
+        .attr('tabindex', 0)
+        .attr('aria-label', d =>
+          `${d.data.name}, ${d.data.category}, ${d.data.value} million copies`)
+        .on('mouseover', showTooltip)
+        .on('mousemove', moveTooltip)
+        .on('mouseout', hideTooltip)
+        .on('focus', showTooltip)
+        .on('blur', hideTooltip);
+
+      tiles.each(function (d) {
+        const w = d.x1 - d.x0;
+        const h = d.y1 - d.y0;
+        const lines = labelLines(d.data.name, w, h);
+        if (!lines.length) return;
+
+        const text = d3.select(this)
+          .append('text')
+          .attr('class', 'tile-label')
+          .attr('x', 8)
+          .attr('y', 17);
+
+        lines.forEach((line, i) => {
+          text.append('tspan')
+            .attr('x', 8)
+            .attr('dy', i === 0 ? 0 : 14)
+            .text(line);
+        });
+      });
+
+      function moveTooltip(event, d) {
+        const stage = document.querySelector('.chart-stage');
+        const stageRect = stage.getBoundingClientRect();
+        const svgRect = svg.node().getBoundingClientRect();
+        const keyboard = event.type === 'focus';
+        const px = keyboard
+          ? svgRect.left + ((d.x0 + d.x1) / 2 / WIDTH) * svgRect.width
+          : event.clientX;
+        const py = keyboard
+          ? svgRect.top + ((d.y0 + d.y1) / 2 / HEIGHT) * svgRect.height
+          : event.clientY;
+
+        const x = Math.max(132, Math.min(px - stageRect.left, stageRect.width - 132));
+        const y = py - stageRect.top;
+        const below = y < 155;
+
+        tooltip
+          .style('left', x + 'px')
+          .style('top', (below ? y + 15 : y - 15) + 'px')
+          .style('transform', below
+            ? 'translate(-50%, 0)'
+            : 'translate(-50%, -100%)');
+      }
+
+      function showTooltip(event, d) {
+        tooltip
+          .attr('data-value', d.data.value)
+          .style('display', 'block');
+        d3.select('#tip-platform').text(d.data.category);
+        d3.select('#tip-name').text(d.data.name);
+        d3.select('#tip-value').text(
+          d3.format(',.2f')(Number(d.data.value)) + 'M'
+        );
+        moveTooltip(event, d);
+      }
+
+      function hideTooltip() {
+        tooltip.style('display', 'none');
+      }
+
+      // A platform swatch for every category in the dataset.
+      const legend = d3.select('#legend')
+        .attr('viewBox', '0 0 1050 122');
+      const columns = 6;
+      const colWidth = 175;
+      const rowHeight = 34;
+
+      const items = legend.selectAll('g.legend-group')
+        .data(platforms)
+        .enter()
+        .append('g')
+        .attr('class', 'legend-group')
+        .attr('transform', (d, i) =>
+          `translate(${(i % columns) * colWidth + 6}, ${Math.floor(i / columns) * rowHeight + 11})`);
+
+      items.append('rect')
+        .attr('class', 'legend-item')
+        .attr('width', 17)
+        .attr('height', 17)
+        .attr('rx', 4)
+        .attr('fill', d => color(d));
+
+      items.append('text')
+        .attr('class', 'legend-label')
+        .attr('x', 26)
+        .attr('y', 13)
+        .text(d => d);
+
+    }).catch(error => {
+      console.error('Could not load video game data:', error);
+      d3.select('.chart-stage')
+        .append('p')
+        .attr('class', 'error')
+        .text('Could not load the dataset. Check your connection and refresh.');
+    });
+  </script>
+</body>
+</html>
